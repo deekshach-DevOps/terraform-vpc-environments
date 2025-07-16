@@ -1,9 +1,10 @@
 provider "aws" {
   region  = var.region
-  profile = "Terraform-admin"
+  profile = "devops-admin"
 }
 
 module "vpc" {
+  environment                  = var.environment 
   source                       = "../../modules/vpc"
   region                       = var.region
   project_name                 = var.project_name

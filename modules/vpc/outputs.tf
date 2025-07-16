@@ -38,3 +38,4 @@ output "private_data_subnet_az2_id" {
 output "internet_gateway" {
   value = aws_internet_gateway.internet_gateway
 }
+

@@ -1,9 +1,10 @@
 provider "aws" {
   region  = var.region
-  profile = "Terraform-admin"
+  profile = "devops-admin"
 }
 
 module "vpc" {
+   environment                  = var.environment 
   source                       = "../../modules/vpc"
   region                       = var.region
   project_name                 = var.project_name
@@ -15,3 +16,5 @@ module "vpc" {
   private_data_subnet_az1_cidr = var.private_data_subnet_az1_cidr
   private_data_subnet_az2_cidr = var.private_data_subnet_az2_cidr
 }
+
+
