@@ -1,6 +1,5 @@
 provider "aws" {
   region  = var.region
-  profile = "devops-admin"
 }
 
 module "vpc" {
