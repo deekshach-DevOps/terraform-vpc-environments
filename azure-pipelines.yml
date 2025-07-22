@@ -7,8 +7,7 @@ variables:
   - group: aws-credentials
 
 pool:
-  name: module-pool
-
+  name: module-pool  
 stages:
   - stage: Terraform_Dev
     jobs:
@@ -19,8 +18,9 @@ stages:
           - powershell: |
               Invoke-WebRequest -Uri "https://releases.hashicorp.com/terraform/1.8.3/terraform_1.8.3_windows_amd64.zip" -OutFile terraform.zip
               Expand-Archive -Path terraform.zip -DestinationPath .
-              Move-Item .\terraform.exe "C:\Windows\System32\" -Force
-            displayName: 'Install Terraform (Windows)'
+              $env:PATH += ";$(System.DefaultWorkingDirectory)"
+              terraform.exe version
+            displayName: 'Install Terraform (Safe for DevOps Agent)'
 
           - powershell: |
               $env:AWS_ACCESS_KEY_ID = "$(AWS_ACCESS_KEY_ID)"
