@@ -1,0 +1,36 @@
+trigger:
+  branches:
+    include:
+      - main
+
+variables:
+  - group: aws-credentials
+
+pool:
+  name: module-pool
+
+stages:
+  - stage: Terraform_Dev
+    jobs:
+      - job: DeployDevVPC
+        steps:
+          - checkout: self
+
+          - powershell: |
+              Invoke-WebRequest -Uri "https://releases.hashicorp.com/terraform/1.8.3/terraform_1.8.3_windows_amd64.zip" -OutFile terraform.zip
+              Expand-Archive -Path terraform.zip -DestinationPath .
+              Move-Item .\terraform.exe "C:\Windows\System32\" -Force
+            displayName: 'Install Terraform (Windows)'
+
+          - powershell: |
+              $env:AWS_ACCESS_KEY_ID = "$(AWS_ACCESS_KEY_ID)"
+              $env:AWS_SECRET_ACCESS_KEY = "$(AWS_SECRET_ACCESS_KEY)"
+              $env:AWS_SESSION_TOKEN = "$(AWS_SESSION_TOKEN)"
+              $env:AWS_REGION = "$(AWS_REGION)"
+
+              cd envs/dev
+              terraform init
+              terraform validate
+              terraform plan -var-file="dev.tfvars"
+              terraform apply -auto-approve -var-file="dev.tfvars"
+            displayName: 'Terraform Init, Plan, Apply (dev)'
