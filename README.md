@@ -1,6 +1,6 @@
 # Terraform VPC Project with Prod and Dev Environments
 
-This Terraform project provisions a custom Virtual Private Cloud (VPC) in AWS using modular Terraform. It supports two environments: **production** and **development**, each maintaining its own remote state in an S3 bucket.
+This repository demonstrates how to provision a custom Virtual Private Cloud (VPC) in AWS using modular Terraform with separate **production** and **development** environments. It also serves as a base to explore different approaches using **Terraform** and **Terragrunt** in future iterations.
 
 ---
 
@@ -17,13 +17,55 @@ TERRAFORM_MODULES/
     ├── prod/
     │   ├── backend.tf       # S3 backend config for prod
     │   ├── main.tf          # Calls the VPC module
-    │   ├── terraform.tfvars # Variable values for prod
+    │   ├── prod.tfvars      # Variable values for prod
     │   └── variables.tf     # Input variable declarations
     └── dev/
         ├── backend.tf       # S3 backend config for dev
         ├── main.tf          # Calls the VPC module
-        ├── terraform.tfvars # Variable values for dev
+        ├── dev.tfvars       # Variable values for dev
         └── variables.tf     # Input variable declarations
+```
+
+---
+
+## 🚀 CI/CD with Azure DevOps
+
+Terraform provisioning is now automated using **Azure DevOps Pipelines**.
+
+### ✅ Pipeline Overview
+
+- Triggered on push to the `main` branch
+- Performs:
+  - `terraform init`
+  - `terraform validate`
+  - `terraform plan`
+  - `terraform apply`
+- Runs in a self-hosted or Microsoft-hosted agent (if parallelism is approved)
+- Uses secure variable groups for AWS credentials
+
+### 📄 Key Files
+
+- `azure-pipelines.yml` — defines the entire pipeline
+- `envs/dev/` — used by default for Terraform actions
+
+### 📦 Azure DevOps Setup
+
+1. Connect this GitHub repo to Azure DevOps
+2. Go to **Pipelines > Library > Variable Group** and create `aws-credentials`:
+   - `AWS_ACCESS_KEY_ID` (Secret ✅)
+   - `AWS_SECRET_ACCESS_KEY` (Secret ✅)
+   - `AWS_SESSION_TOKEN` (Optional, if using SSO)
+   - `AWS_REGION` (e.g., `eu-south-1`)
+3. Configure a self-hosted agent (or request hosted parallelism)
+4. Run the pipeline from Azure DevOps UI or via Git pushes
+
+### 📂 Switching Environments
+
+To deploy `prod`, change the working directory in the pipeline:
+
+```yaml
+cd envs/prod
+terraform apply -var-file=prod.tfvars
 ```
 
 ---
@@ -32,29 +74,29 @@ TERRAFORM_MODULES/
 
 Each environment has:
 
-- Its own backend configuration (`backend.tf`) for storing Terraform state in S3.
-- Independent variable values in `terraform.tfvars`.
-- Calls to a common `vpc` module located in `modules/vpc/`.
+- Its own backend configuration (`backend.tf`) for storing Terraform state in S3
+- Independent variable values in `.tfvars`
+- Calls to a shared `vpc` module
 
 ---
 
-## 🧱 Module Details (modules/vpc/)
+## 🧱 Module Details (`modules/vpc/`)
 
-This reusable module provisions the following:
+This reusable module provisions:
 
-- VPC with a custom CIDR block.
-- Two public subnets.
-- Two private application subnets.
-- Two private data subnets.
+- A VPC with a custom CIDR block
+- Two public subnets
+- Two private application subnets
+- Two private data subnets
 
-Input variables and outputs are defined in `variables.tf` and `outputs.tf`.
+Inputs and outputs are defined in `variables.tf` and `outputs.tf`
 
 ---
 
-## 📦 Inputs (`terraform.tfvars` example)
+## 📦 Inputs (`dev.tfvars` example)
 
-```
-region                       = "eu-north-1"
+```hcl
+region                       = "eu-south-1"
 project_name                 = "website-vpc-prod"
 vpc_cidr                     = "10.0.0.0/16"
 public_subnet_az1_cidr       = "10.0.0.0/24"
@@ -67,49 +109,117 @@ private_data_subnet_az2_cidr = "10.0.5.0/24"
 
 ---
 
-## 🚀 Usage
-
-### For Production
-
-```bash
-cd envs/prod
-terraform init
-terraform apply
-```
-
-### For Development
-
-```bash
-cd envs/dev
-terraform init
-terraform apply
-```
-
----
-
 ## 🗂 Remote State Configuration
 
-Both environments store state remotely in S3 using `backend.tf`. Example:
+Each environment stores state in S3 using `backend.tf`. Example for dev:
 
-```
+```hcl
 terraform {
   backend "s3" {
-    bucket  = "myterraforms3bucketcloud"
-    key     = "prod/website_vpc.tfstate"  # or dev/...
-    region  = "eu-north-1"
-    profile = "Terraform-admin"
+    bucket  = "azure-terraform-vpc"
+    key     = "dev/vpc/terraform.tfstate"
+    region  = "eu-south-1"
+    profile = "devops-admin"
   }
 }
 ```
 
 ---
 
+## 🔐 AWS SSO Authentication (CI/CD Setup)
+
+### 🛠 Prerequisite
+
+Ensure you have AWS CLI v2+ installed:
+```bash
+aws --version
+```
+
+### 🔧 Step 1: Configure SSO Profile Locally
+
+```bash
+aws configure sso --profile <your-profile-name>
+
+```
+
+You’ll be prompted for:
+- SSO start URL 
+- Region
+- AWS account ID and role name
+
+Creates this entry in `~/.aws/config`:
+```ini
+[profile <your-profile-name>]
+sso_start_url = https://your-org.awsapps.com/start
+sso_region    = eu-south-1
+sso_account_id = 123456789012
+sso_role_name  = TerraformAdministrator
+region         = eu-south-1
+```
+
+### 🔐 Step 2: Log in
+
+```bash
+aws sso login --profile <your-profile-name>
+```
+
+### 📤 Step 3: Export Temporary Credentials
+To extract credentials for use in Azure DevOps
+
+```bash
+aws configure export-credentials --profile <your-profile-name>
+```
+This will return:
+-AWS_ACCESS_KEY_ID
+-AWS_SECRET_ACCESS_KEY
+-AWS_SESSION_TOKEN
+
+Copy these and add them to your Azure DevOps variable group (aws-credentials) as secrets.
+
+
+### 🔎 Step 4: Verify Identity
+
+```bash
+aws sts get-caller-identity --profile devops-admin
+```
+
+---
+
+## ⚙️ Manual Usage Instructions (Optional)
+
+Use these only if running Terraform manually (outside CI/CD).
+
+### For Production
+
+```bash
+cd envs/prod
+aws sso login --profile devops-admin
+terraform init
+terraform apply -var-file=prod.tfvars
+```
+
+### For Development
+
+```bash
+cd envs/dev
+aws sso login --profile devops-admin
+terraform init
+terraform apply -var-file=dev.tfvars
+```
+
+---
+
 ## ✅ Best Practices Followed
 
-- Separate environments with isolated state.
-- Reusable and versionable Terraform modules.
-- Clear variable separation using `terraform.tfvars`.
-- Remote backend with S3 for state locking and sharing.
+- CI/CD with Azure DevOps for repeatable, auditable infrastructure changes
+- Separate environments with isolated state
+- Modular Terraform structure
+- Secure AWS credential handling
+- Remote state with S3
 
+---
 
-**Profile**: Terraform-admin
+## 📌 Coming Soon
+
+- 🔄 Terragrunt comparison setup
+- 🔁 PR-triggered Terraform plans
